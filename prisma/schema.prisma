@@ -1,0 +1,56 @@
+// Prisma schema — 数据模型见《播客转文字稿AI梳理-需求分析与技术方案.md》3.3④
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Episode {
+  id          Int         @id @default(autoincrement())
+  title       String?
+  sourceType  String // "link" | "upload"
+  sourceUrl   String?
+  audioPath   String?
+  durationSec Int?
+  status      String      @default("pending")
+  // pending | downloading | transcribing | summarizing | done | failed
+  errorMsg    String?
+  // 各阶段完成时间（用于详情页展示环节耗时）
+  downloadedAt  DateTime?
+  transcribedAt DateTime?
+  summarizedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  transcript  Transcript?
+  article     Article?
+  messages    ChatMessage[]
+}
+
+model Transcript {
+  id        Int     @id @default(autoincrement())
+  episodeId Int     @unique
+  episode   Episode @relation(fields: [episodeId], references: [id])
+  language  String  @default("zh")
+  segments  String // JSON: [{start, end, text}]
+}
+
+model Article {
+  id        Int      @id @default(autoincrement())
+  episodeId Int      @unique
+  episode   Episode  @relation(fields: [episodeId], references: [id])
+  template  String   @default("deep") // deep | xiaohongshu | script
+  contentMd String
+  createdAt DateTime @default(now())
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  episodeId Int
+  episode   Episode  @relation(fields: [episodeId], references: [id])
+  role      String // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+}
