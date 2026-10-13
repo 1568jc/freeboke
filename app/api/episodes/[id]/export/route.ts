@@ -11,6 +11,7 @@ import {
   articleToDocx,
   articleToHtml,
   articleToTxt,
+  transcriptToDocx,
   transcriptToJson,
   transcriptToMd,
   transcriptToSrt,
@@ -22,7 +23,7 @@ const execFileAsync = promisify(execFile);
 export const runtime = "nodejs";
 
 const ARTICLE_FORMATS = ["md", "html", "docx", "txt"];
-const TRANSCRIPT_FORMATS = ["srt", "txt", "json", "md"];
+const TRANSCRIPT_FORMATS = ["srt", "txt", "json", "md", "docx"];
 const AUDIO_FORMATS = ["mp3", "wav", "m4a"];
 
 /** 多格式导出：GET /api/episodes/[id]/export?part=article|transcript|audio&format=… */
@@ -87,15 +88,34 @@ export async function GET(
       return Response.json({ error: `文稿支持格式：${TRANSCRIPT_FORMATS.join(" / ")}` }, { status: 400 });
     }
     const segments = parseSegments(episode.transcript.segments);
+    // timestamps=0 关闭时间戳（srt 字幕除外，恒带时间轴）
+    const withTimestamps = searchParams.get("timestamps") !== "0";
     switch (format) {
       case "srt":
         return textResponse(transcriptToSrt(segments), `${safeName}.srt`, "application/x-subrip");
       case "txt":
-        return textResponse(transcriptToTxt(segments), `${safeName}.txt`, "text/plain");
+        return textResponse(
+          transcriptToTxt(segments, { timestamps: withTimestamps }),
+          `${safeName}.txt`,
+          "text/plain",
+        );
       case "json":
         return textResponse(transcriptToJson(segments), `${safeName}.json`, "application/json");
       case "md":
-        return textResponse(transcriptToMd(segments), `${safeName}.md`, "text/markdown");
+        return textResponse(
+          transcriptToMd(segments, { timestamps: withTimestamps }),
+          `${safeName}.md`,
+          "text/markdown",
+        );
+      case "docx": {
+        const buf = await transcriptToDocx(title, segments, { timestamps: withTimestamps });
+        return new Response(new Uint8Array(buf), {
+          headers: {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}.docx`,
+          },
+        });
+      }
     }
   }
 

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -48,7 +49,11 @@ next-env.d.ts
 # project: 截图与参考图（验收产物，不入库）
 /shots/
 /图片效果/
+/模仿优化/
 /episode10-*.png
 
 # project: Kimi Code 配置（含 Context7 API Key，不入库）
 /.kimi-code/
+
+# project: 本地 AI 技能包（开发工具，非产品代码，不入库）
+/.agents/

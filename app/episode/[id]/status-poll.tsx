@@ -56,6 +56,8 @@ export function StatusPoll({
   const [errorMsg, setErrorMsg] = useState(initialErrorMsg);
   const [times, setTimes] = useState<StageTimes>(initialTimes);
   const [now, setNow] = useState<number>(() => Date.now());
+  const [alive, setAlive] = useState(true);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (!ACTIVE.has(status)) return;
@@ -67,7 +69,9 @@ export function StatusPoll({
         const data = (await res.json()) as {
           status: string;
           errorMsg: string | null;
+          alive: boolean;
         } & StageTimes;
+        if (data.alive !== alive) setAlive(data.alive);
         if (data.status !== status) {
           setStatus(data.status);
           setErrorMsg(data.errorMsg);
@@ -82,7 +86,25 @@ export function StatusPoll({
       clearInterval(timer);
       clearInterval(tick);
     };
-  }, [episodeId, status, router]);
+  }, [episodeId, status, alive, router]);
+
+  // 中断恢复：状态停在中途但进程内没有任务在跑（服务重启残留）
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/retry`, { method: "POST" });
+      const data = (await res.json()) as { error?: string; status?: string };
+      if (!res.ok) {
+        alert(data.error ?? "重试失败");
+        return;
+      }
+      if (data.status) setStatus(data.status);
+      setAlive(true);
+      router.refresh();
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   // 当前环节的起点（用于"已用时"）
   const stageStart = (() => {
@@ -93,10 +115,26 @@ export function StatusPoll({
   })();
   const elapsed = stageStart ? fmtElapsed(now - +new Date(stageStart)) : null;
 
+  // 中断判定：进行中但进程内无任务（服务重启残留）
+  const interrupted = ACTIVE.has(status) && !alive;
+
   return (
     <p className="text-xs text-sub">
       状态：{STATUS_LABEL[status] ?? status}
-      {ACTIVE.has(status) && elapsed ? `（已用时 ${elapsed}）` : ""}
+      {interrupted ? (
+        <>
+          {"（已中断，通常是服务重启导致）"}
+          <button
+            onClick={retry}
+            disabled={retrying}
+            className="ml-2 rounded-md border border-line px-2 py-0.5 text-xs text-brand hover:bg-highlight disabled:opacity-40"
+          >
+            {retrying ? "重启中…" : "继续处理"}
+          </button>
+        </>
+      ) : (
+        ACTIVE.has(status) && elapsed ? `（已用时 ${elapsed}）` : ""
+      )}
       {status === "done" && stageSummary(times) ? ` · ${stageSummary(times)}` : ""}
       {errorMsg ? ` · ${errorMsg}` : ""}
     </p>

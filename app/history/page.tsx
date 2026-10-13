@@ -22,16 +22,16 @@ export default async function HistoryPage() {
       <h1 className="text-xl font-bold">历史记录</h1>
 
       {episodes.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line p-8 text-center text-sm text-sub">
+        <p className="rounded-xl border border-dashed border-line bg-paper p-8 text-center text-sm text-sub">
           暂无记录，去<Link href="/" className="underline">首页</Link>处理第一期播客吧
         </p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper shadow-[0_1px_4px_rgba(31,35,41,0.04)]">
           {episodes.map((ep) => (
             <li key={ep.id}>
               <Link
                 href={`/episode/${ep.id}`}
-                className="flex items-center justify-between px-4 py-3 hover:bg-line/40"
+                className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-line/30"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">

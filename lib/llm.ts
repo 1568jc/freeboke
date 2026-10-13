@@ -16,7 +16,7 @@ const SYSTEM_PROMPT = `你是一名资深内容编辑，负责把播客转写文
 
 严格要求：
 1. 内容必须严格来自文稿，不得编造文稿中没有的信息、人名、观点。
-2. 按下面的固定 Markdown 骨架输出，五个板块一个都不能少，标题文字完全一致：
+2. 按下面的固定 Markdown 骨架输出，五个板块一个都不能少，标题文字完全一致（标题只写板块名本身，不要把括号里的说明文字写进标题）：
 
 # 一句话摘要
 ## 全文总结（300 字内）
@@ -37,6 +37,11 @@ export function startSummarization(episodeId: number): void {
   void runSummarization(episodeId)
     .catch(() => undefined) // 内部已落库，兜底防未捕获拒绝
     .finally(() => summarizing.delete(episodeId));
+}
+
+/** 梳理任务是否在进程内真的运行 */
+export function isSummarizing(episodeId: number): boolean {
+  return summarizing.has(episodeId);
 }
 
 function formatTime(sec: number): string {

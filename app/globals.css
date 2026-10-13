@@ -7,9 +7,15 @@
   header, .no-print { display: none !important; }
 }
 
+/* 锚点导航平滑滚动（尊重减少动态偏好） */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
 /* ===== 全站设计令牌（规范 v2，只允许这些颜色与字级） ===== */
 @theme {
-  --color-paper: #ffffff;     /* 背景 */
+  --color-pagebg: #f6f7f9;    /* 页面底（浅灰，衬白色卡片） */
+  --color-paper: #ffffff;     /* 卡片/浮层 */
   --color-ink: #1f2329;       /* 正文 */
   --color-sub: #646a73;       /* 次要文字 */
   --color-weak: #8f959e;      /* 弱提示 */

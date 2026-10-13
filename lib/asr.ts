@@ -25,6 +25,11 @@ export function startTranscription(episodeId: number): void {
     .finally(() => transcribing.delete(episodeId));
 }
 
+/** 转写任务是否在进程内真的运行 */
+export function isTranscribing(episodeId: number): boolean {
+  return transcribing.has(episodeId);
+}
+
 async function runTranscription(episodeId: number): Promise<void> {
   const fail = async (errorMsg: string) => {
     await prisma.episode.update({

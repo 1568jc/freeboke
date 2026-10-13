@@ -19,12 +19,18 @@ const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000; // 下载超时 30 分钟
 const globalForTasks = globalThis as unknown as { runningTasks?: Set<number> };
 const running = (globalForTasks.runningTasks ??= new Set<number>());
 
-/** 是否已有任务在进行（单任务串行约束） */
+/** 下载任务是否在进程内真的运行（进程重启后残留的 downloading 记录会返回 false） */
+export function isDownloadRunning(episodeId: number): boolean {
+  return running.has(episodeId);
+}
+
+/** 是否已有任务在进行（单任务串行约束；只算进程内真正在跑的，进程重启残留不算） */
 export async function hasActiveTask(): Promise<boolean> {
-  const count = await prisma.episode.count({
+  const rows = await prisma.episode.findMany({
     where: { status: { in: ["pending", "downloading"] } },
+    select: { id: true },
   });
-  return count > 0;
+  return rows.some((r) => running.has(r.id));
 }
 
 /** fire-and-forget 启动下载任务 */

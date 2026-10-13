@@ -29,11 +29,21 @@ export function transcriptToSrt(segments: Segment[]): string {
     .join("\n\n");
 }
 
-export function transcriptToTxt(segments: Segment[]): string {
+export type TranscriptRenderOpts = { timestamps?: boolean };
+
+export function transcriptToTxt(
+  segments: Segment[],
+  { timestamps = true }: TranscriptRenderOpts = {},
+): string {
+  if (!timestamps) return segments.map((s) => s.text).join("\n");
   return segments.map((s) => `[${formatTime(s.start)}] ${s.text}`).join("\n");
 }
 
-export function transcriptToMd(segments: Segment[]): string {
+export function transcriptToMd(
+  segments: Segment[],
+  { timestamps = true }: TranscriptRenderOpts = {},
+): string {
+  if (!timestamps) return segments.map((s) => s.text).join("\n\n");
   return segments.map((s) => `**[${formatTime(s.start)}]** ${s.text}`).join("\n\n");
 }
 
@@ -131,14 +141,20 @@ export async function articleToDocx(title: string, md: string): Promise<Buffer> 
   return Packer.toBuffer(doc);
 }
 
-/** 文稿 → DOCX（时间戳加粗 + 文本段落） */
-export async function transcriptToDocx(title: string, segments: Segment[]): Promise<Buffer> {
+/** 文稿 → DOCX（可选时间戳加粗 + 文本段落） */
+export async function transcriptToDocx(
+  title: string,
+  segments: Segment[],
+  { timestamps = true }: TranscriptRenderOpts = {},
+): Promise<Buffer> {
   const { Document, Packer, Paragraph, TextRun } = await import("docx");
   const paragraphs = segments.map(
     (s) =>
       new Paragraph({
         children: [
-          new TextRun({ text: `[${formatTime(s.start)}] `, bold: true, color: "888888" }),
+          ...(timestamps
+            ? [new TextRun({ text: `[${formatTime(s.start)}] `, bold: true, color: "888888" })]
+            : []),
           new TextRun(s.text),
         ],
       }),
