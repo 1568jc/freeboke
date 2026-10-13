@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { DeleteEpisodeButton } from "./delete-button";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,10 @@ export default async function HistoryPage() {
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper shadow-[0_1px_4px_rgba(31,35,41,0.04)]">
           {episodes.map((ep) => (
-            <li key={ep.id}>
+            <li key={ep.id} className="flex items-center transition-colors hover:bg-line/30">
               <Link
                 href={`/episode/${ep.id}`}
-                className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-line/30"
+                className="flex min-w-0 flex-1 items-center justify-between px-4 py-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
@@ -57,6 +58,12 @@ export default async function HistoryPage() {
                   {STATUS_LABEL[ep.status] ?? ep.status}
                 </span>
               </Link>
+              <span className="pr-3">
+                <DeleteEpisodeButton
+                  episodeId={ep.id}
+                  title={ep.title ?? ep.sourceUrl ?? `任务 #${ep.id}`}
+                />
+              </span>
             </li>
           ))}
         </ul>
