@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Check, Loader2 } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "排队中",
@@ -13,6 +14,13 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const ACTIVE = new Set(["pending", "downloading", "transcribing", "summarizing"]);
+
+/** 处理流程的三阶段（pending 归入下载） */
+const STAGES = [
+  ["downloading", "下载"],
+  ["transcribing", "转写"],
+  ["summarizing", "梳理"],
+] as const;
 
 type StageTimes = {
   createdAt: string | null;
@@ -118,25 +126,81 @@ export function StatusPoll({
   // 中断判定：进行中但进程内无任务（服务重启残留）
   const interrupted = ACTIVE.has(status) && !alive;
 
+  // 三阶段进度：当前阶段下标（pending 视为下载阶段）
+  const currentIdx = (() => {
+    if (status === "pending") return 0;
+    const i = STAGES.findIndex(([k]) => k === status);
+    return i;
+  })();
+  const showSteps = ACTIVE.has(status) && !interrupted;
+
   return (
-    <p className="text-xs text-sub">
-      状态：{STATUS_LABEL[status] ?? status}
-      {interrupted ? (
-        <>
-          {"（已中断，通常是服务重启导致）"}
-          <button
-            onClick={retry}
-            disabled={retrying}
-            className="ml-2 rounded-md border border-line px-2 py-0.5 text-xs text-brand hover:bg-highlight disabled:opacity-40"
-          >
-            {retrying ? "重启中…" : "继续处理"}
-          </button>
-        </>
-      ) : (
-        ACTIVE.has(status) && elapsed ? `（已用时 ${elapsed}）` : ""
+    <div className="mt-1.5">
+      <p className="text-xs text-sub">
+        状态：{STATUS_LABEL[status] ?? status}
+        {interrupted ? (
+          <>
+            {"（已中断，通常是服务重启导致）"}
+            <button
+              onClick={retry}
+              disabled={retrying}
+              className="ml-2 rounded-md border border-line px-2 py-0.5 text-xs text-brand hover:bg-highlight disabled:opacity-40"
+            >
+              {retrying ? "重启中…" : "继续处理"}
+            </button>
+          </>
+        ) : (
+          ACTIVE.has(status) && elapsed ? `（已用时 ${elapsed}）` : ""
+        )}
+        {status === "done" && stageSummary(times) ? ` · ${stageSummary(times)}` : ""}
+        {errorMsg ? ` · ${errorMsg}` : ""}
+      </p>
+
+      {/* 三阶段进度条：下载 → 转写 → 梳理 */}
+      {showSteps && (
+        <div className="mt-2.5 flex items-start">
+          {STAGES.map(([key, label], i) => {
+            const state = i < currentIdx ? "done" : i === currentIdx ? "active" : "pending";
+            return (
+              <div key={key} className="flex flex-1 items-start last:flex-none">
+                <div className="flex flex-col items-center gap-1">
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                      state === "done"
+                        ? "border-brand bg-brand text-white"
+                        : state === "active"
+                          ? "border-brand text-brand"
+                          : "border-line text-weak"
+                    }`}
+                  >
+                    {state === "done" ? (
+                      <Check className="h-3 w-3" aria-hidden="true" />
+                    ) : state === "active" ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <span className="h-1.5 w-1.5 rounded-full bg-line" />
+                    )}
+                  </span>
+                  <span
+                    className={`text-[10px] leading-3 ${
+                      state === "active" ? "text-brand font-medium" : state === "done" ? "text-sub" : "text-weak"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                </div>
+                {i < STAGES.length - 1 && (
+                  <div
+                    className={`mx-1 mt-2.5 h-px flex-1 ${
+                      i < currentIdx ? "bg-brand" : "bg-line"
+                    }`}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
-      {status === "done" && stageSummary(times) ? ` · ${stageSummary(times)}` : ""}
-      {errorMsg ? ` · ${errorMsg}` : ""}
-    </p>
+    </div>
   );
 }

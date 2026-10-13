@@ -6,11 +6,45 @@ import { CloudUpload, Link2, Search } from "lucide-react";
 
 type Mode = "link" | "upload";
 
+/** 从粘贴内容中提取首个 URL：支持纯链接和「【标题】 链接?share_source=…」分享文本 */
+export function extractUrl(text: string): string | null {
+  const m = text.match(/https?:\/\/[^\s，。"'【】<>()\[\]]+/);
+  return m ? m[0] : null;
+}
+
+/** XHR 上传（fetch 拿不到上传进度）：onProgress 回报 0-100 */
+function uploadWithProgress(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<{ status: number; data: { id?: number; error?: string } }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      let data: { id?: number; error?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText) as typeof data;
+      } catch {
+        // 非 JSON 响应（如 nginx 错误页），按状态码处理
+      }
+      resolve({ status: xhr.status, data });
+    };
+    xhr.onerror = () => reject(new Error("network"));
+    const fd = new FormData();
+    fd.append("file", file);
+    xhr.send(fd);
+  });
+}
+
 export function HomeForm() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("link");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState<"idle" | "link" | "upload">("idle");
+  const [uploadPct, setUploadPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -18,22 +52,25 @@ export function HomeForm() {
     setBusy(kind);
     setError(null);
     try {
-      const res =
-        kind === "link"
-          ? await fetch("/api/episodes", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url: input }),
-            })
-          : await (() => {
-              const fd = new FormData();
-              fd.append("file", input);
-              return fetch("/api/upload", { method: "POST", body: fd });
-            })();
+      let data: { id?: number; error?: string };
+      let status: number;
+      if (kind === "link") {
+        const res = await fetch("/api/episodes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: input }),
+        });
+        status = res.status;
+        data = (await res.json()) as typeof data;
+      } else {
+        setUploadPct(0);
+        const r = await uploadWithProgress(input as File, setUploadPct);
+        status = r.status;
+        data = r.data;
+      }
 
-      const data = (await res.json()) as { id?: number; error?: string };
-      if (!res.ok || !data.id) {
-        setError(data.error ?? `请求失败（HTTP ${res.status}）`);
+      if (status < 200 || status >= 300 || !data.id) {
+        setError(data.error ?? `请求失败（HTTP ${status}）`);
         return;
       }
       router.push(`/episode/${data.id}`);
@@ -41,6 +78,7 @@ export function HomeForm() {
       setError("网络错误，请重试");
     } finally {
       setBusy("idle");
+      setUploadPct(0);
     }
   }
 
@@ -70,16 +108,22 @@ export function HomeForm() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (url.trim() && busy === "idle") void postAndGoto(url.trim(), "link");
+            if (busy !== "idle") return;
+            const extracted = extractUrl(url);
+            if (!extracted) {
+              setError("没有找到有效链接，请粘贴链接或分享文本");
+              return;
+            }
+            void postAndGoto(extracted, "link");
           }}
         >
           <div className="flex items-center gap-2 rounded-full border border-line bg-paper p-2 pl-4 shadow-[0_1px_4px_rgba(31,35,41,0.04)] focus-within:border-brand">
             <Link2 className="h-4 w-4 shrink-0 text-weak" aria-hidden="true" />
             <input
-              type="url"
+              type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="粘贴播客 / 音频链接，支持 B 站、小宇宙、YouTube、直链…"
+              placeholder="粘贴链接或分享文本（如 B 站【标题】+ 链接），支持 B 站、小宇宙、YouTube、直链…"
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               aria-label="播客或音频链接"
             />
@@ -96,17 +140,33 @@ export function HomeForm() {
       ) : (
         <div
           className={`rounded-2xl border border-dashed border-line bg-paper p-10 text-center shadow-[0_1px_4px_rgba(31,35,41,0.04)] transition-colors ${
-            busy === "idle" ? "cursor-pointer hover:border-brand hover:bg-highlight" : "opacity-50"
+            busy === "idle" ? "cursor-pointer hover:border-brand hover:bg-highlight" : "opacity-70"
           }`}
           onClick={() => busy === "idle" && fileInputRef.current?.click()}
         >
           <CloudUpload className="mx-auto h-8 w-8 text-brand" aria-hidden="true" />
-          <span className="mt-3 block text-sm font-medium">
-            {busy === "upload" ? "上传中…" : "点击选择音频，或把文件拖到这里"}
-          </span>
-          <span className="mt-1 block text-xs text-sub">
-            mp3 / m4a / wav，单个 ≤500MB、时长 ≤6 小时
-          </span>
+          {busy === "upload" ? (
+            <div className="mx-auto mt-4 max-w-xs">
+              <div className="h-1.5 overflow-hidden rounded-full bg-line">
+                <div
+                  className="h-full rounded-full bg-brand transition-[width] duration-300"
+                  style={{ width: `${uploadPct}%` }}
+                />
+              </div>
+              <span className="mt-2 block text-xs text-sub">
+                {uploadPct < 100 ? `上传中 ${uploadPct}%` : "上传完成，服务器处理中…"}
+              </span>
+            </div>
+          ) : (
+            <>
+              <span className="mt-3 block text-sm font-medium">
+                点击选择音频，或把文件拖到这里
+              </span>
+              <span className="mt-1 block text-xs text-sub">
+                mp3 / m4a / wav，单个 ≤500MB、时长 ≤6 小时
+              </span>
+            </>
+          )}
           <input
             ref={fileInputRef}
             type="file"

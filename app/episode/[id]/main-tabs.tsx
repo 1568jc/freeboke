@@ -21,11 +21,11 @@ export function MainTabs({
   hasTranscript: boolean;
   initialMessages: Array<{ id: number; role: string; content: string }>;
 }) {
-  const [tab, setTab] = useState<"article" | "transcript" | "chat">("article");
+  const [tab, setTab] = useState<"article" | "transcript" | "chat">("transcript");
 
   const tabs = [
-    ["article", "梳理文章", FileText],
     ["transcript", "全文文稿", Captions],
+    ["article", "梳理文章", FileText],
     ["chat", "对话", MessageSquare],
   ] as const;
 
